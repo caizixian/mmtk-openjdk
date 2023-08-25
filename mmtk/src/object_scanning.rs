@@ -194,3 +194,12 @@ pub fn scan_object(
     // );
     unsafe { oop_iterate(mem::transmute(object), closure) }
 }
+
+
+pub fn is_obj_array(oop: Oop) -> bool {
+    oop.klass.id == KlassID::ObjArray
+}
+
+pub fn is_val_array(oop: Oop) -> bool {
+    oop.klass.id == KlassID::TypeArray
+}

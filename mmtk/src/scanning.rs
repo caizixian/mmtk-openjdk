@@ -96,4 +96,12 @@ impl Scanning<OpenJDK> for VMScanning {
             ((*UPCALLS).prepare_for_roots_re_scanning)();
         }
     }
+
+    fn is_obj_array(o: ObjectReference) -> bool {
+        crate::object_scanning::is_obj_array(unsafe { std::mem::transmute(o) })
+    }
+
+    fn is_val_array(o: ObjectReference) -> bool {
+        crate::object_scanning::is_val_array(unsafe { std::mem::transmute(o) })
+    }
 }
