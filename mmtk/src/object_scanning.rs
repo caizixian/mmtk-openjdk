@@ -28,6 +28,8 @@ enum AlignmentEncodingPattern {
 impl OopIterate for AlignmentEncodingPattern {
     fn oop_iterate(&self, oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
         match self {
+            // Currently exclude mirrors, refs, and instances with references
+            // patterns we cannot encode
             AlignmentEncodingPattern::Fallback => oop_iterate(oop, closure),
             AlignmentEncodingPattern::RefArray => {
                 let array = unsafe { oop.as_array_oop() };
