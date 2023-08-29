@@ -46,6 +46,8 @@ nogc_no_zeroing = ["mmtk/nogc_no_zeroing"]
 # See README.
 vo_bit = ["mmtk/vo_bit"]
 
+alignment_encoding = []
+
 # This compile time constant places the mark bit in the header of the object instead of on the side.
 mark_bit_in_header = []
 

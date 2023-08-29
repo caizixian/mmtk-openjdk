@@ -250,6 +250,7 @@ impl AlignmentEncoding {
     }
 }
 
+#[allow(unused)]
 fn oop_iterate_with_encoding(oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
     let pattern = AlignmentEncoding::get_klass_code_for_region(oop.klass);
     pattern.oop_iterate(oop, closure);
@@ -301,7 +302,10 @@ pub fn scan_object(
     //     unsafe { *(object.value() as *const usize) },
     //     unsafe { *((object.value() + 8) as *const usize) }
     // );
+    #[cfg(feature = "alignment_encoding")]
     unsafe { oop_iterate_with_encoding(mem::transmute(object), closure) }
+    #[cfg(not(feature = "alignment_encoding"))]
+    unsafe { oop_iterate(mem::transmute(object), closure) }
 }
 
 pub fn is_obj_array(oop: Oop) -> bool {
