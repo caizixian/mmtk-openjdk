@@ -12,6 +12,82 @@ trait OopIterate: Sized {
     fn oop_iterate(&self, oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>);
 }
 
+#[repr(u8)]
+#[derive(Copy, Debug, Clone)]
+enum AlignmentEncodingPattern {
+    AEFallback = 7,
+    AERefArray = 6,
+    AENoRef = 0,
+    AERef_0 = 1,
+    AERef_1_2_3 = 2,
+    AERef_4_5_6 = 3,
+    AERef_2 = 4,
+    AERef_0_1 = 5,
+}
+
+impl OopIterate for AlignmentEncodingPattern {
+    fn oop_iterate(&self, oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
+        match self {
+            AlignmentEncodingPattern::AEFallback => oop_iterate(oop, closure),
+            AlignmentEncodingPattern::AERefArray => {
+                let array = unsafe { oop.as_array_oop() };
+                for oop in unsafe { array.data::<Oop>(BasicType::T_OBJECT) } {
+                    closure.visit_edge(Address::from_ref(oop as &Oop));
+                }
+            }
+            AlignmentEncodingPattern::AENoRef => {}
+            AlignmentEncodingPattern::AERef_0 => {
+                // if the first field (field 0) is a ref field, it has an offset of 16 from oop
+                let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
+                closure.visit_edge(start + (0usize << LOG_BYTES_IN_ADDRESS));
+            }
+            AlignmentEncodingPattern::AERef_1_2_3 => {
+                let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
+                closure.visit_edge(start + (1usize << LOG_BYTES_IN_ADDRESS));
+                closure.visit_edge(start + (2usize << LOG_BYTES_IN_ADDRESS));
+                closure.visit_edge(start + (3usize << LOG_BYTES_IN_ADDRESS));
+            }
+            AlignmentEncodingPattern::AERef_4_5_6 => {
+                let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
+                closure.visit_edge(start + (4usize << LOG_BYTES_IN_ADDRESS));
+                closure.visit_edge(start + (5usize << LOG_BYTES_IN_ADDRESS));
+                closure.visit_edge(start + (6usize << LOG_BYTES_IN_ADDRESS));
+            }
+            AlignmentEncodingPattern::AERef_2 => {
+                let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
+                closure.visit_edge(start + (2usize << LOG_BYTES_IN_ADDRESS));
+            }
+            AlignmentEncodingPattern::AERef_0_1 => {
+                let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
+                closure.visit_edge(start + (0usize << LOG_BYTES_IN_ADDRESS));
+                closure.visit_edge(start + (1usize << LOG_BYTES_IN_ADDRESS));
+            }
+        }
+        // oop_iterate(oop, closure)
+    }
+}
+
+impl From<AlignmentEncodingPattern> for u8 {
+    fn from(value: AlignmentEncodingPattern) -> Self {
+        value as u8
+    }
+}
+
+impl From<u8> for AlignmentEncodingPattern {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::AENoRef,
+            1 => Self::AERef_0,
+            2 => Self::AERef_1_2_3,
+            3 => Self::AERef_4_5_6,
+            4 => Self::AERef_2,
+            5 => Self::AERef_0_1,
+            6 => Self::AERefArray,
+            7 => Self::AEFallback,
+            _ => unreachable!(),
+        }
+    }
+}
 impl OopIterate for OopMapBlock {
     fn oop_iterate(&self, oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
         let start = oop.get_field_address(self.offset);
@@ -146,6 +222,37 @@ fn oop_iterate_slow(oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>, tls: 
     }
 }
 
+struct AlignmentEncoding {}
+
+impl AlignmentEncoding {
+    const FIELD_WIDTH: u32 = 3;
+    const MAX_ALIGN_WORDS: u32 = 1 << Self::FIELD_WIDTH;
+    const FIELD_SHIFT: u32 = LOG_BYTES_IN_WORD as u32;
+    const ALIGNMENT_INCREMENT: u32 = 1 << Self::FIELD_SHIFT;
+    const KLASS_MASK: u32 = (Self::MAX_ALIGN_WORDS - 1) << Self::FIELD_SHIFT;
+    const ALIGN_CODE_NONE: i32 = -1;
+    const VERBOSE: bool = true;
+
+    fn get_klass_code_for_region(klass: &Klass) -> AlignmentEncodingPattern {
+        let klass = klass as *const Klass as usize;
+        // println!("binding klass 0x{:x}", klass);
+        let align_code = ((klass & Self::KLASS_MASK as usize) >> Self::FIELD_SHIFT) as u32;
+        debug_assert!(
+            align_code >= 0 && align_code < Self::MAX_ALIGN_WORDS,
+            "Invalid align code"
+        );
+        let ret: AlignmentEncodingPattern = (align_code as u8).into();
+        let inverse: u8 = ret.into();
+        debug_assert!(inverse == align_code as u8);
+        ret
+    }
+}
+
+fn oop_iterate_with_encoding(oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
+    let pattern = AlignmentEncoding::get_klass_code_for_region(oop.klass);
+    pattern.oop_iterate(oop, closure);
+}
+
 fn oop_iterate(oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
     let klass_id = oop.klass.id;
     debug_assert!(
@@ -192,9 +299,8 @@ pub fn scan_object(
     //     unsafe { *(object.value() as *const usize) },
     //     unsafe { *((object.value() + 8) as *const usize) }
     // );
-    unsafe { oop_iterate(mem::transmute(object), closure) }
+    unsafe { oop_iterate_with_encoding(mem::transmute(object), closure) }
 }
-
 
 pub fn is_obj_array(oop: Oop) -> bool {
     oop.klass.id == KlassID::ObjArray
