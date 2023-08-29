@@ -15,49 +15,49 @@ trait OopIterate: Sized {
 #[repr(u8)]
 #[derive(Copy, Debug, Clone)]
 enum AlignmentEncodingPattern {
-    AEFallback = 7,
-    AERefArray = 6,
-    AENoRef = 0,
-    AERef_0 = 1,
-    AERef_1_2_3 = 2,
-    AERef_4_5_6 = 3,
-    AERef_2 = 4,
-    AERef_0_1 = 5,
+    Fallback = 7,
+    RefArray = 6,
+    NoRef = 0,
+    Ref0 = 1,
+    Ref1_2_3 = 2,
+    Ref4_5_6 = 3,
+    Ref2 = 4,
+    Ref0_1 = 5,
 }
 
 impl OopIterate for AlignmentEncodingPattern {
     fn oop_iterate(&self, oop: Oop, closure: &mut impl EdgeVisitor<OpenJDKEdge>) {
         match self {
-            AlignmentEncodingPattern::AEFallback => oop_iterate(oop, closure),
-            AlignmentEncodingPattern::AERefArray => {
+            AlignmentEncodingPattern::Fallback => oop_iterate(oop, closure),
+            AlignmentEncodingPattern::RefArray => {
                 let array = unsafe { oop.as_array_oop() };
                 for oop in unsafe { array.data::<Oop>(BasicType::T_OBJECT) } {
                     closure.visit_edge(Address::from_ref(oop as &Oop));
                 }
             }
-            AlignmentEncodingPattern::AENoRef => {}
-            AlignmentEncodingPattern::AERef_0 => {
+            AlignmentEncodingPattern::NoRef => {}
+            AlignmentEncodingPattern::Ref0 => {
                 // if the first field (field 0) is a ref field, it has an offset of 16 from oop
                 let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
                 closure.visit_edge(start + (0usize << LOG_BYTES_IN_ADDRESS));
             }
-            AlignmentEncodingPattern::AERef_1_2_3 => {
+            AlignmentEncodingPattern::Ref1_2_3 => {
                 let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
                 closure.visit_edge(start + (1usize << LOG_BYTES_IN_ADDRESS));
                 closure.visit_edge(start + (2usize << LOG_BYTES_IN_ADDRESS));
                 closure.visit_edge(start + (3usize << LOG_BYTES_IN_ADDRESS));
             }
-            AlignmentEncodingPattern::AERef_4_5_6 => {
+            AlignmentEncodingPattern::Ref4_5_6 => {
                 let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
                 closure.visit_edge(start + (4usize << LOG_BYTES_IN_ADDRESS));
                 closure.visit_edge(start + (5usize << LOG_BYTES_IN_ADDRESS));
                 closure.visit_edge(start + (6usize << LOG_BYTES_IN_ADDRESS));
             }
-            AlignmentEncodingPattern::AERef_2 => {
+            AlignmentEncodingPattern::Ref2 => {
                 let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
                 closure.visit_edge(start + (2usize << LOG_BYTES_IN_ADDRESS));
             }
-            AlignmentEncodingPattern::AERef_0_1 => {
+            AlignmentEncodingPattern::Ref0_1 => {
                 let start = oop.get_field_address(2 * BYTES_IN_WORD as i32);
                 closure.visit_edge(start + (0usize << LOG_BYTES_IN_ADDRESS));
                 closure.visit_edge(start + (1usize << LOG_BYTES_IN_ADDRESS));
@@ -76,14 +76,14 @@ impl From<AlignmentEncodingPattern> for u8 {
 impl From<u8> for AlignmentEncodingPattern {
     fn from(value: u8) -> Self {
         match value {
-            0 => Self::AENoRef,
-            1 => Self::AERef_0,
-            2 => Self::AERef_1_2_3,
-            3 => Self::AERef_4_5_6,
-            4 => Self::AERef_2,
-            5 => Self::AERef_0_1,
-            6 => Self::AERefArray,
-            7 => Self::AEFallback,
+            0 => Self::NoRef,
+            1 => Self::Ref0,
+            2 => Self::Ref1_2_3,
+            3 => Self::Ref4_5_6,
+            4 => Self::Ref2,
+            5 => Self::Ref0_1,
+            6 => Self::RefArray,
+            7 => Self::Fallback,
             _ => unreachable!(),
         }
     }
@@ -228,17 +228,17 @@ impl AlignmentEncoding {
     const FIELD_WIDTH: u32 = 3;
     const MAX_ALIGN_WORDS: u32 = 1 << Self::FIELD_WIDTH;
     const FIELD_SHIFT: u32 = LOG_BYTES_IN_WORD as u32;
-    const ALIGNMENT_INCREMENT: u32 = 1 << Self::FIELD_SHIFT;
+    // const ALIGNMENT_INCREMENT: u32 = 1 << Self::FIELD_SHIFT;
     const KLASS_MASK: u32 = (Self::MAX_ALIGN_WORDS - 1) << Self::FIELD_SHIFT;
-    const ALIGN_CODE_NONE: i32 = -1;
-    const VERBOSE: bool = true;
+    // const ALIGN_CODE_NONE: i32 = -1;
+    // const VERBOSE: bool = false;
 
     fn get_klass_code_for_region(klass: &Klass) -> AlignmentEncodingPattern {
         let klass = klass as *const Klass as usize;
         // println!("binding klass 0x{:x}", klass);
         let align_code = ((klass & Self::KLASS_MASK as usize) >> Self::FIELD_SHIFT) as u32;
         debug_assert!(
-            align_code >= 0 && align_code < Self::MAX_ALIGN_WORDS,
+            align_code < Self::MAX_ALIGN_WORDS,
             "Invalid align code"
         );
         let ret: AlignmentEncodingPattern = (align_code as u8).into();
