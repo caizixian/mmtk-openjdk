@@ -1,4 +1,4 @@
-use crate::abi::Oop;
+use crate::abi::{Oop, Klass};
 use crate::UPCALLS;
 use crate::{vm_metadata, OpenJDK};
 use mmtk::util::alloc::fill_alignment_gap;
@@ -108,5 +108,10 @@ impl<const COMPRESSED: bool> ObjectModel<OpenJDK<COMPRESSED>> for VMObjectModel<
         // If oop.klass is not a valid pointer, we may segfault here.
         let klass_id = oop.klass::<COMPRESSED>().id as i32;
         (0..6).contains(&klass_id)
+    }
+
+    fn get_klass(object: ObjectReference) -> u64 {
+        let oop = Oop::from(object);
+        oop.klass::<COMPRESSED>() as *const Klass as u64
     }
 }
