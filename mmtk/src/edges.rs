@@ -183,6 +183,10 @@ impl<const COMPRESSED: bool> Edge for OpenJDKEdge<COMPRESSED> {
             unsafe { self.addr.store(object) }
         }
     }
+
+    fn as_address(&self) -> Address {
+        self.addr
+    }
 }
 
 /// A range of OpenJDKEdge, usually used for arrays.
