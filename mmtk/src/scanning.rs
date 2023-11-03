@@ -110,4 +110,8 @@ impl<const COMPRESSED: bool> Scanning<OpenJDK<COMPRESSED>> for VMScanning {
     fn is_val_array(o: ObjectReference) -> bool {
         crate::object_scanning::is_val_array(unsafe { std::mem::transmute(o) })
     }
+
+    fn instance_mirror_info(o: ObjectReference) -> Option<(u64, u64)> {
+        crate::object_scanning::instance_mirror_info(unsafe { std::mem::transmute(o) })
+    }
 }

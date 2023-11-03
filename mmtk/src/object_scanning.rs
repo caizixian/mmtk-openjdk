@@ -365,3 +365,13 @@ pub fn is_obj_array(oop: Oop) -> bool {
 pub fn is_val_array(oop: Oop) -> bool {
     oop.klass::<false>().id == KlassID::TypeArray
 }
+
+pub fn instance_mirror_info(oop: Oop) -> Option<(u64, u64)> {
+    if oop.klass::<false>().id == KlassID::InstanceMirror {
+        let start = InstanceMirrorKlass::start_of_static_fields(oop);
+        let len = InstanceMirrorKlass::static_oop_field_count(oop);
+        Some((start.as_usize() as u64, len as u64))
+    } else {
+        None
+    }
+}
